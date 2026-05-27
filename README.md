@@ -4,6 +4,11 @@
 
 ### cmg is a lightweight memory layer for inspectable long-running LLM-as-a-judge and reviewer-agent workflows. It makes unsupported or sycophantic decision shifts easier to detect and audit.
 
+[PyPI](https://pypi.org/project/claim-memory-graph/) |
+[User guide](docs/user-guide.md) |
+[DeepEval adapter](docs/user-guide.md#deepeval-adapter) |
+[Inspect AI scorer](docs/user-guide.md#inspect-ai-scorer)
+
 It is built for applications that ask models to judge, review, rank, triage, or
 decide over time: LLM-as-a-judge systems, code reviewers, evaluator pipelines,
 support triage, arbitration flows, and multi-agent review loops.
@@ -81,8 +86,9 @@ pip install 'claim-memory-graph[openai]'
 pip install 'claim-memory-graph[anthropic]'
 ```
 
-The PyPI distribution is `claim-memory-graph`; the Python import package is
-`cmg`. The core package supports Python 3.10+ and uses only the standard library.
+The [PyPI distribution](https://pypi.org/project/claim-memory-graph/) is
+`claim-memory-graph`; the Python import package is `cmg`. The core package
+supports Python 3.10+ and uses only the standard library.
 
 ## Quickstart
 
