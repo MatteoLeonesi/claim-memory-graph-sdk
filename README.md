@@ -1,11 +1,11 @@
-# cmg - Claim Memory Graph
+# CMG - Claim Memory Graph
 
 <p align="center">
   <img src="docs/assets/banner.png" alt="Claim Memory Graph banner" width="100%">
 </p>
 
 <p align="center">
-  <strong>Inspectable memory for long-running LLM judges and reviewer agents.</strong>
+  <strong>A memory layer for multi-turn and long-horizon workflows where LLM judges or reviewer agents make decisions.</strong>
 </p>
 
 <p align="center">
@@ -25,17 +25,36 @@
   <a href="https://pypi.org/project/claim-memory-graph/">
     <img alt="PyPI" src="https://img.shields.io/pypi/v/claim-memory-graph.svg">
   </a>
-  <img alt="Python" src="https://img.shields.io/pypi/pyversions/claim-memory-graph.svg">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
   <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
 </p>
 
-`cmg` is a lightweight Python layer for making LLM-as-a-judge and
-reviewer-agent workflows inspectable over time. It records the evidence a model
-cites, the claims it commits to, the decisions it makes, and the invalidations
-that explain why earlier claims should be retired.
+`CMG` is a lightweight memory layer for making LLM-as-a-judge and
+reviewer-agent workflows inspectable across turns. It records the evidence a
+model cites, the claims it commits to, the decisions it makes, and the
+invalidations that explain why earlier claims should be retired.
 
-The goal is simple: make unsupported or sycophantic decision shifts easier to
-detect and audit without taking over your evaluator, agent, or review system.
+It is built for multi-turn and long-horizon settings where a judge, reviewer, or
+arbiter needs to stay grounded in evidence instead of silently drifting across
+decisions. The goal is to make unsupported or sycophantic decision shifts
+easier to detect and audit.
+
+## How I Got the Idea
+
+I built CMG because during my eval experiments I kept wanting to inspect *why*
+an LLM-as-a-judge or reviewer agent made a decision, not just the final verdict.
+
+CMG is basically an inspector layer for judge and reviewer agents.
+
+It tracks evidence, claims, decisions, and invalidations as a small append-only
+graph, so you can see what the model cited, what it committed to, and whether a
+later decision actually explains what changed. I think this is useful anywhere
+you have reviewer agents: code review, research workflows, eval pipelines,
+multi-agent systems, and similar settings.
+
+One thing I noticed in my experiments is that this pattern seems to make
+decisions more stable and evidence-grounded. The model appears less likely to
+just agree with pushback or flip its verdict without support or evidence.
 
 ## Install
 
