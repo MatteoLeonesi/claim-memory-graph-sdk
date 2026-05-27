@@ -1,61 +1,131 @@
 # cmg - Claim Memory Graph
 
-![Claim Memory Graph banner](docs/assets/banner.png)
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Claim Memory Graph banner" width="100%">
+</p>
 
-### cmg is a lightweight memory layer for inspectable long-running LLM-as-a-judge and reviewer-agent workflows. It makes unsupported or sycophantic decision shifts easier to detect and audit.
+<p align="center">
+  <strong>Inspectable memory for long-running LLM judges and reviewer agents.</strong>
+</p>
 
-[PyPI](https://pypi.org/project/claim-memory-graph/) |
-[User guide](docs/user-guide.md) |
-[DeepEval adapter](docs/user-guide.md#deepeval-adapter) |
-[Inspect AI scorer](docs/user-guide.md#inspect-ai-scorer)
+<p align="center">
+  <a href="https://pypi.org/project/claim-memory-graph/">PyPI</a>
+  |
+  <a href="docs/user-guide.md">User guide</a>
+  |
+  <a href="docs/user-guide.md#deepeval-adapter">DeepEval adapter</a>
+  |
+  <a href="docs/user-guide.md#inspect-ai-scorer">Inspect AI scorer</a>
+</p>
 
-It is built for applications that ask models to judge, review, rank, triage, or
-decide over time: LLM-as-a-judge systems, code reviewers, evaluator pipelines,
-support triage, arbitration flows, and multi-agent review loops.
+<p align="center">
+  <a href="https://github.com/MatteoLeonesi/claim-memory-graph-sdk/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/MatteoLeonesi/claim-memory-graph-sdk/actions/workflows/ci.yml/badge.svg">
+  </a>
+  <a href="https://pypi.org/project/claim-memory-graph/">
+    <img alt="PyPI" src="https://img.shields.io/pypi/v/claim-memory-graph.svg">
+  </a>
+  <img alt="Python" src="https://img.shields.io/pypi/pyversions/claim-memory-graph.svg">
+  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
+</p>
 
-Instead of treating every answer as an isolated blob of text, `cmg` records a
-small append-only graph of:
+`cmg` is a lightweight Python layer for making LLM-as-a-judge and
+reviewer-agent workflows inspectable over time. It records the evidence a model
+cites, the claims it commits to, the decisions it makes, and the invalidations
+that explain why earlier claims should be retired.
 
-| Node | Meaning |
+The goal is simple: make unsupported or sycophantic decision shifts easier to
+detect and audit without taking over your evaluator, agent, or review system.
+
+## Install
+
+```bash
+pip install claim-memory-graph
+
+# Optional provider helpers
+pip install 'claim-memory-graph[openai]'
+pip install 'claim-memory-graph[anthropic]'
+```
+
+The PyPI distribution is `claim-memory-graph`; the Python import package is
+`cmg`. The core package supports Python 3.10+ and has zero runtime
+dependencies.
+
+## Why CMG
+
+LLM judges often return a final verdict without a durable trace of what the
+verdict depended on. That becomes hard to debug when a later turn, reviewer, or
+user pushback changes the answer.
+
+CMG gives your application a small append-only graph that answers:
+
+- What evidence did the judge cite?
+- Which claims were active when the decision was made?
+- Did the verdict flip without an explicit invalidation?
+- Did a later decision silently drop a still-active reason?
+- Can we inspect the full trail after an eval run or review?
+
+## What It Records
+
+| Node | Role |
 |---|---|
-| `Support` | Evidence supplied by the application: rubric items, logs, diffs, test output, user facts, retrieved documents. |
-| `Commitment` | A concrete claim the model makes and the support it cites. |
+| `Support` | Evidence supplied by your app: rubrics, diffs, logs, tests, retrieved docs, user facts. |
+| `Commitment` | A concrete claim the model makes, tied to support IDs. |
 | `Decision` | A verdict that cites active commitments. |
-| `Invalidation` | An explicit retraction that says what changed and which prior claim should be retired. |
+| `Invalidation` | A retraction that explains what changed and which prior claim should be retired. |
 
-The model's prose still passes through unchanged. `cmg` removes optional hidden
-annotation blocks from the user-visible response, persists the graph, and returns
-`Violation` records when a new operation no longer lines up with the active claim
-history.
+Model prose still passes through unchanged. CMG only removes optional hidden
+`cmg` annotation blocks from the user-visible response, persists the graph, and
+returns deterministic `Violation` records when a new operation no longer matches
+the active claim history.
 
-## Why this exists
+## What It Catches
 
-LLM judges and reviewers often give a final verdict without leaving a durable
-trace of what the verdict depended on. That becomes a problem when the next turn,
-another reviewer, or a user pushback changes the answer.
+| Signal | Meaning |
+|---|---|
+| `verdict_flip_without_invalidation` | A new decision changed verdict while prior commitments remained active. |
+| `silent_commitment_drop` | A later decision kept the same verdict but stopped citing an active prior commitment. |
+| `unknown_ref` | An operation cited an ID that is not in the graph. |
+| `wrong_ref_kind` | A commitment cited a non-support, or a decision cited a non-commitment. |
+| `ref_not_active` | A decision cited a commitment that was already invalidated. |
 
-`cmg` is meant to answer practical questions:
+Violations are observations, not blockers. Your application decides whether to
+log them, show them to a human, ask the model for a corrected retraction, or
+ignore them.
 
-- Which evidence did the judge cite before choosing a verdict?
-- Which claims were still active when the reviewer approved or rejected?
-- Did the model reverse its verdict without saying what changed?
-- Did a later verdict silently drop a still-active reason?
-- Can we log these transitions and inspect them after an eval run or review?
+## Quickstart
 
-The goal is not to force a model to be correct. The goal is to make its explicit
-claims and verdict transitions observable.
+```python
+import asyncio
+from pathlib import Path
 
-## What it does not claim
+from cmg import ClaimGraph, JsonlStorage
 
-`cmg` is not a benchmark, a scorer, a policy engine, or a replacement for your
-evaluator. It does not prove that a verdict is true, reveal hidden chain of
-thought, or block model output by itself.
 
-It gives your application a structured memory layer and deterministic telemetry.
-Your app decides whether a violation should be logged, shown to a human, used to
-ask for a corrected retraction, or ignored.
+async def main() -> None:
+    async with ClaimGraph(JsonlStorage(Path("review.cmg.jsonl"))) as graph:
+        evidence = (await graph.add_support(
+            "Unit test test_total fails after the patch"
+        )).node
 
-## How it fits
+        claim = (await graph.add_commitment(
+            "The patch breaks the total calculation",
+            refs=(evidence.node_id,),
+        )).node
+
+        await graph.add_decision("request_changes", refs=(claim.node_id,))
+
+        print(graph.last_decision())
+        print([v.code for v in graph.violations()])
+
+
+asyncio.run(main())
+```
+
+For model annotation, state injection, streaming, provider helpers, and storage
+configuration, see the [user guide](docs/user-guide.md).
+
+## How It Fits
 
 ```mermaid
 flowchart LR
@@ -68,175 +138,51 @@ flowchart LR
     CMG -->|"Violation records"| Obs["logs / evals / review UI"]
 ```
 
-The layer is deliberately small:
-
-- zero runtime dependencies in the core package;
-- JSONL storage by default, with a pluggable storage protocol;
-- optional OpenAI and Anthropic helpers;
-- async, streaming, and sync wrapper APIs;
-- deterministic checks that observe, not block.
-
-## Install
-
-```bash
-pip install claim-memory-graph
-
-# Optional provider helpers:
-pip install 'claim-memory-graph[openai]'
-pip install 'claim-memory-graph[anthropic]'
-```
-
-The [PyPI distribution](https://pypi.org/project/claim-memory-graph/) is
-`claim-memory-graph`; the Python import package is `cmg`. The core package
-supports Python 3.10+ and uses only the standard library.
-
-## Quickstart
-
-```python
-import asyncio
-from pathlib import Path
-
-from cmg import ClaimGraph, JsonlStorage, arun_turn, build_annotation_system_prompt
-
-
-async def main() -> None:
-    async with ClaimGraph(JsonlStorage(Path("review.cmg.jsonl"))) as graph:
-        support = (await graph.add_support("Unit test test_total fails after the patch")).node
-
-        async def reviewer(messages: list[dict[str, str]]) -> str:
-            return (
-                "Request changes: the patch appears to break an existing total calculation.\n"
-                "```cmg\n"
-                '{"ops": [{"op": "commitment", '
-                '"content": "the patch breaks the total calculation", '
-                f'"refs": ["{support.node_id}"]}]}}\n'
-                "```"
-            )
-
-        result = await arun_turn(
-            graph,
-            reviewer,
-            [
-                {"role": "system", "content": build_annotation_system_prompt()},
-                {
-                    "role": "user",
-                    "content": f"Review the patch. Evidence {support.node_id}: {support.content}",
-                },
-            ],
-        )
-
-        commitment_ids = [
-            applied.node.node_id
-            for applied in result.applied
-            if applied.node.kind == "commitment"
-        ]
-        if commitment_ids:
-            await graph.add_decision("request_changes", commitment_ids)
-
-        print(result.visible_text)
-        print([v.code for v in graph.violations()])
-
-
-asyncio.run(main())
-```
-
-For a full integration guide, see [docs/user-guide.md](docs/user-guide.md).
-
-## Judge and reviewer workflow
-
-A typical integration uses one graph per conversation, review, eval item, or
-arbitration case.
-
-1. Pre-seed `Support` nodes for facts the model may cite: rubric text, retrieved
-   evidence, code diffs, test output, prior answers, tool results, or human notes.
-2. Prompt the model with `build_annotation_system_prompt()` and the relevant
-   support IDs.
-3. Ask the model for short, explicit commitments tied to those support IDs.
-4. Add or request a `Decision` that cites active commitment IDs.
-5. Send `Violation` records to logs, metrics, traces, or a review UI.
-
-Important wire-format detail: refs must point to IDs that already exist in the
-graph. If a model creates a new commitment in one annotation block, it cannot cite
-that freshly minted `k-...` ID later in the same block because the SDK creates the
-ID during ingest. For verdict workflows, use one of these patterns:
-
-- two-pass judge: first collect commitments, then ask for a decision after state
-  injection exposes the new commitment IDs;
-- app-owned decision: parse the model's verdict from your normal response format
-  and call `graph.add_decision(...)` with the commitment IDs that were just
-  applied;
-- app-owned commitments: create commitments from known structured evidence, then
-  ask the model to choose a decision over those IDs.
-
-## Violation signals
-
-The headline signals are:
-
-| Code | Meaning |
-|---|---|
-| `verdict_flip_without_invalidation` | A new decision changed verdict while prior commitments remained active. |
-| `silent_commitment_drop` | A later decision kept the same verdict but stopped citing an active prior commitment. |
-| `unknown_ref` | An operation cited an ID that is not in the graph. |
-| `wrong_ref_kind` | A commitment cited a non-support, or a decision cited a non-commitment. |
-| `ref_not_active` | A decision cited a commitment that had already been invalidated. |
-| `empty_refs` | A commitment, decision, or invalidation omitted required refs. |
-
-Every operation is still appended. Violations are observations that make drift
-and unsupported reversals visible to the application.
-
-## Wire format for annotations
-
-The model may annotate a response with either a fenced block:
-
-````
-```cmg
-{"ops": [{"op": "commitment", "content": "...", "refs": ["s-..."]}]}
-```
-````
-
-or a self-closing tag:
-
-```html
-<cmg ops='[{"op":"commitment","content":"...","refs":["s-..."]}]'/>
-```
-
-Both are optional. If the model emits plain prose, the response still passes
-through and no graph operation is applied.
-
-## Storage
-
-`JsonlStorage(path)` writes one JSON record per line with a schema version on
-every record. For production systems, implement the `Storage` protocol with:
-
-- `append_node(node)`;
-- `append_violation(violation)`;
-- `iter_records()`;
-- `aclose()`.
-
-That is enough to back the graph with sqlite, postgres, object storage, or an
-in-memory test store.
-
-## Eval framework adapters
-
-`cmg` fits into existing eval frameworks as a judge-side diagnostic layer. In
-DeepEval, wrap it in a custom `BaseMetric`; in Inspect AI, use it inside a custom
-scorer and store CMG fields in `Score.metadata`. The eval framework still owns
-datasets, pass/fail scoring, aggregation, and reporting. CMG adds per-item graph
-logs, cited commitments, parse warnings, and violation codes, making it easier to
-debug why a judge selected a verdict or why it changed position under a second
-review pass.
-
-## Where it is useful
+## Where It Helps
 
 - LLM-as-a-judge pipelines that need an audit trail for verdicts.
-- AI code review tools that need to explain why a patch was approved or rejected.
-- Multi-reviewer arbitration where each judge should cite evidence.
-- Eval harnesses that want to detect capitulation under pushback.
-- Support, moderation, or triage agents that should not silently abandon prior
+- AI code review tools that need to explain approvals or requested changes.
+- Eval harnesses that test judge stability under pushback.
+- Multi-reviewer arbitration where judges should cite evidence.
+- Support, moderation, and triage agents that should not silently abandon prior
   claims.
-- Scientific or analytical agents that track hypotheses, evidence, and
-  retractions.
+
+## Eval Integrations
+
+CMG fits into existing eval frameworks as a judge-side diagnostic layer. The
+eval framework still owns datasets, scoring, aggregation, and reporting; CMG
+adds per-item graph logs, cited commitments, parse warnings, and violation
+codes.
+
+| Framework | Guide |
+|---|---|
+| DeepEval | [Wrap CMG in a custom `BaseMetric`](docs/user-guide.md#deepeval-adapter). |
+| Inspect AI | [Use CMG inside a custom scorer](docs/user-guide.md#inspect-ai-scorer). |
+
+## What It Is Not
+
+CMG is not a benchmark, scorer, policy engine, or replacement for your
+evaluator. It does not prove that a verdict is true, and it does not block model
+output by itself.
+
+It gives your application structured memory and deterministic telemetry. Your
+system decides what to do with the signals.
+
+## Docs
+
+| Topic | Link |
+|---|---|
+| Full integration guide | [docs/user-guide.md](docs/user-guide.md) |
+| Development notes | [docs/dev-guide.md](docs/dev-guide.md) |
+| Release checklist | [docs/release.md](docs/release.md) |
+| PyPI package | [claim-memory-graph](https://pypi.org/project/claim-memory-graph/) |
 
 ## License
 
 Apache-2.0.
+
+## Meme
+
+<p align="center">
+  <img src="docs/assets/meme.png" alt="Claim Memory Graph meme" width="560">
+</p>
