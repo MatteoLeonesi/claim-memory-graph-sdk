@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -38,10 +38,11 @@ async def arun_turn(
     *,
     inject_state: bool = True,
     on_violation: Callable[[Violation], None] | None = None,
+    allowed_ops: Collection[str] | None = None,
 ) -> TurnResult:
     payload = _with_state(graph, messages) if inject_state else list(messages)
     response = await llm_fn(payload)
-    return await _ingest_text(graph, response, on_violation)
+    return await _ingest_text(graph, response, on_violation, allowed_ops=allowed_ops)
 
 
 async def astream_turn(
@@ -84,11 +85,17 @@ async def _ingest_text(
     graph: ClaimGraph,
     text: str,
     on_violation: Callable[[Violation], None] | None,
+    *,
+    allowed_ops: Collection[str] | None = None,
 ) -> TurnResult:
     parsed = parse_turn(text)
     applied: list[AppendResult] = []
     warnings = list(parsed.parse_warnings)
     for op in parsed.ops:
+        name = op.get("op")
+        if allowed_ops is not None and name not in allowed_ops:
+            warnings.append(f"ignored disallowed op kind: {name!r}")
+            continue
         result, warn = await _apply_op(graph, op)
         if warn is not None:
             warnings.append(warn)
