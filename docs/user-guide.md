@@ -1,13 +1,6 @@
 # CMG user guide
 
-CMG helps you inspect one LLM judge case at a time.
-
-It stores the input, the candidate answer, the rubric, the judge claims, and the
-final verdict.
-
-It writes a JSONL audit log.
-
-You can read that log with the CLI.
+CMG helps you inspect one LLM judge case at a time. For each case it stores the input, the candidate answer, the rubric, the judge's claims, and the final verdict. All of it goes to a JSONL audit log that you can read back with the CLI.
 
 ## 1. Install
 
@@ -24,53 +17,41 @@ pip install 'claim-memory-graph[anthropic]'
 
 The import name is `cmg`.
 
-## 2. Try It Locally
+## 2. Try it locally
 
-Run the demo.
-
-It does not call an external model.
+The demo runs without calling an external model.
 
 ```bash
 python examples/local_judge_demo.py
 ```
 
-View all cases:
+From there you can view the cases a few different ways. Show every case with its evidence.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --show-evidence
 ```
 
-View a compact run summary:
+Get a compact run summary.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --summary
 ```
 
-View only cases that need human review:
+See only the cases that need human review.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --flagged-only
 ```
 
-Export report JSON:
+Export the report as JSON.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --json
 ```
 
-## 3. How CMG Fits Your Judge
+## 3. How CMG fits your judge
 
-Your app still owns the goal.
-
-Your app still owns the main prompt.
-
-Your app still owns the model call.
-
-CMG does not replace those parts.
-
-CMG helps you tell the judge what to verify.
-
-You pass these fields:
+Your app still owns the goal, the main prompt, and the model call. CMG does not replace any of that. What it adds is a way to tell the judge what to check, using the fields you pass in.
 
 | Field | What it means |
 |---|---|
@@ -81,25 +62,11 @@ You pass these fields:
 | `criteria` | The exact checks the judge should cover. |
 | `extra_supports` | Extra facts, logs, tool output, policy text, or source material. |
 
-CMG stores those fields as evidence.
+CMG stores those fields as evidence and then asks the judge to cite them. That citation step is what makes CMG useful, because the judge can no longer just answer `pass`. It has to make claims, and each of those claims has to cite the evidence ids.
 
-Then it asks the judge to cite that evidence.
+## 4. Add CMG to your judge
 
-That is the main value.
-
-The judge cannot just say `pass`.
-
-It must make claims.
-
-Those claims must cite the evidence ids.
-
-## 4. Add CMG To Your Judge
-
-Create one graph per evaluated item.
-
-Use a fresh file for each item run.
-
-Do not append repeat runs to the same case file.
+Create one graph per evaluated item, and use a fresh file for each run. Do not append repeat runs to the same case file.
 
 ```python
 from pathlib import Path
@@ -131,7 +98,7 @@ async with ClaimGraph(JsonlStorage(graph_path)) as graph:
     report = judge_report(graph)
 ```
 
-Use the report in your eval row metadata.
+Then carry the report into your eval row metadata.
 
 ```python
 metadata = {
@@ -141,13 +108,9 @@ metadata = {
 }
 ```
 
-## 5. What Your Judge Sees
+## 5. What your judge sees
 
-CMG sends your judge a normal chat message list.
-
-The message contains support ids.
-
-They look like this:
+CMG sends your judge an ordinary chat message list, with the support ids embedded in it.
 
 ```text
 [s-abc123] candidate_output
@@ -155,11 +118,7 @@ Candidate output:
 The answer text...
 ```
 
-Your `judge_fn` receives that message list.
-
-You pass it to the model you already use.
-
-CMG does not care which provider you use.
+Your `judge_fn` receives that list and passes it to whatever model you already use. CMG does not care which provider that is.
 
 ```python
 async def judge_fn(messages: list[dict[str, str]]) -> str:
@@ -167,23 +126,17 @@ async def judge_fn(messages: list[dict[str, str]]) -> str:
     return response.text
 ```
 
-## 6. What Your Judge Must Return
+## 6. What your judge must return
 
-The visible answer must start with a verdict line.
+The visible answer has to start with a verdict line.
 
 ```text
 VERDICT: pass
 ```
 
-The verdict must be in the `verdicts` list.
+The verdict has to be one of the labels in the `verdicts` list. If it is missing or not allowed, `result.decision` is `None`, and the report includes `missing_verdict` or `invalid_verdict`.
 
-If it is missing, `result.decision` is `None`.
-
-If it is not allowed, `result.decision` is also `None`.
-
-The report will include `missing_verdict` or `invalid_verdict`.
-
-The judge should also emit a hidden CMG block.
+The judge should also add a hidden CMG block.
 
 ````text
 ```cmg
@@ -191,18 +144,9 @@ The judge should also emit a hidden CMG block.
 ```
 ````
 
-Each `commitment` is one claim.
+Each `commitment` is one claim, and each claim should cite support ids of the form `s-...`. CMG creates those ids for the prompt, candidate output, reference answer, rubric, and criteria, and your model receives them in the judge prompt.
 
-Each claim should cite support ids.
-
-Support ids look like `s-...`.
-
-CMG creates them for the prompt, candidate output, reference answer, rubric, and
-criteria.
-
-Your model receives those ids in the judge prompt.
-
-## 7. What CMG Records
+## 7. What CMG records
 
 CMG uses four node types.
 
@@ -213,15 +157,11 @@ CMG uses four node types.
 | `Decision` | The final verdict. CMG records this, not the model. |
 | `Invalidation` | A retraction of a prior claim. |
 
-The graph is append-only.
+The graph is append-only, so the whole audit trail can be replayed later.
 
-That means the audit trail can be replayed later.
+## 8. Read the report
 
-## 8. Read The Report
-
-`judge_report(graph)` returns a dict.
-
-Important fields:
+`judge_report(graph)` returns a dict. These are the fields that matter most.
 
 | Field | Meaning |
 |---|---|
@@ -234,13 +174,7 @@ Important fields:
 | `human_review_flags` | Deterministic flags for review. |
 | `violations` | Raw graph consistency codes. |
 
-Flags are split into two groups.
-
-Hard flags are structural audit failures.
-
-Soft flags are review signals.
-
-Common flags:
+The flags split into two groups. Hard flags are real audit failures. Soft flags are just signals to review. Here are the common ones.
 
 | Flag | Meaning |
 |---|---|
@@ -254,66 +188,48 @@ Common flags:
 | `verdict_flip_without_invalidation` | The verdict changed without a retraction. |
 | `silent_commitment_drop` | A later verdict dropped an active claim. |
 
-Flags do not prove the judge is wrong.
+A flag does not prove the judge is wrong. It tells you where a human should look first.
 
-They tell you where a human should look first.
+## 9. Use the CLI
 
-## 9. Use The CLI
-
-`cmg-view` is the local dashboard for now.
-
-Show all logs:
+`cmg-view` is the local dashboard for now. Show all logs.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl
 ```
 
-Show a summary:
+Show a summary.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --summary
 ```
 
-Show the evidence too:
+Include the evidence.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --show-evidence
 ```
 
-Show only risky cases:
+Show only the risky cases.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --flagged-only
 ```
 
-Export JSON:
+Export JSON.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --json
 ```
 
-## 10. Production Notes
+## 10. Production notes
 
-Use a fresh JSONL file for each evaluated item.
-
-Use a fresh output directory for each full eval run.
-
-Keep dataset ids, model ids, and run ids in your eval framework metadata.
-
-Store the CMG path with each score.
-
-Then review flagged cases with:
+Use a fresh JSONL file for each evaluated item, and a fresh output directory for each full eval run. Keep dataset ids, model ids, and run ids in your eval framework's metadata, and store the CMG path alongside each score. Review the flagged cases like this.
 
 ```bash
 cmg-view path/to/run/*.cmg.jsonl --flagged-only --show-evidence
 ```
 
-## 11. What CMG Does Not Do
+## 11. What CMG does not do
 
-CMG does not decide whether the judge is correct.
-
-CMG does not replace human review.
-
-CMG does not replace your eval harness.
-
-It gives you a clear audit trail for each judge decision.
+CMG does not decide whether the judge is correct, and it does not replace human review or your eval harness. What it gives you is a clear audit trail for each judge decision.

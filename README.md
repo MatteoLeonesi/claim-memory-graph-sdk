@@ -1,68 +1,47 @@
-[![PyPI version](https://img.shields.io/pypi/v/claim-memory-graph.svg)](https://pypi.org/project/claim-memory-graph/)
-[![Downloads](https://static.pepy.tech/badge/claim-memory-graph)](https://pepy.tech/project/claim-memory-graph)
+<p align="center">
+  <img src="docs/assets/cmg-hero.gif" alt="Animated CMG mascot" width="140">
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/claim-memory-graph/"><img src="https://img.shields.io/pypi/v/claim-memory-graph.svg" alt="PyPI version"></a>
+  <a href="https://pepy.tech/project/claim-memory-graph"><img src="https://static.pepy.tech/badge/claim-memory-graph" alt="Downloads"></a>
+</p>
 
 # CMG - Claim Memory Graph
 
-<p align="center">
-  <img src="docs/assets/banner.png" alt="Claim Memory Graph banner" width="100%">
-</p>
-
-<p align="center">
-  <strong>A small audit layer for LLM-as-a-judge systems.</strong>
-</p>
-
-CMG records what an LLM judge saw.
-
-It records the claims the judge made.
-
-It records the verdict it gave.
-
-It also records when a claim was later challenged or retracted.
-
-The goal is simple: make judge output easier for a human to check.
+An LLM judge usually hands you a verdict and little else. You get a `PASS`, but you cannot tell whether it really checked your rubric or used the evidence you gave it. CMG closes that gap by making the judge back up each verdict with claims and tying every claim to the evidence behind it. A set of plain checks then flags the cases where the verdict does not hold up, without putting a second LLM in the loop. It will not tell you who is right, but it will tell you which verdicts you can trust and which ones a person should read.
 
 ## Why
 
-LLM judges are useful, but they are not neutral.
+LLM judges are useful, but they are not neutral. Researchers keep finding the same failure modes.
 
-Research has shown common failure modes:
-
-- Zheng et al. report position bias, verbosity bias, self-enhancement bias, and
-  limited reasoning.
-- Li et al. show scoring bias from rubric order, score ids, and reference
-  answer scoring.
-- Feng et al. show that explicit rubrics and criteria can help judge
-  consistency, but do not solve it.
+- Zheng et al. report position bias, verbosity bias, self-enhancement bias, and limited reasoning.
+- Li et al. show scoring bias from rubric order, score ids, and reference answer scoring.
+- Feng et al. show that explicit rubrics and criteria can help judge consistency, but do not solve it.
 - Wang et al. show weak evidence verification in research-agent judging.
-- Chen et al. show reliability gaps for long-form outputs, even when rubrics or
-  references are present.
+- Chen et al. show reliability gaps for long-form outputs, even when rubrics or references are present.
 
-CMG does not remove these problems.
+CMG does not pretend to fix these biases, but it does make them easy to spot. You tell the judge what to check by passing the task, the answer, an optional reference, the rubric, and the criteria, and CMG saves all of that as evidence for the judge to make claims against. Each verdict then has to rest on real claims, and each claim has to point back to a piece of that evidence, so when the judge cuts a corner the viewer flags it, whether that is missing evidence, an ignored reference, a rubric item nobody checked, a bad verdict, or an unsafe verdict change.
 
-It makes them easier to see.
-
-It helps you tell the judge what to verify.
-
-You pass the task, answer, reference, rubric, and criteria.
-
-CMG turns them into cited evidence.
-
-It then asks the judge to make claims against that evidence.
-
-It forces each valid verdict to point to active claims.
-
-Each claim must point to evidence.
-
-The viewer then shows missing evidence, ignored references, uncovered rubric
-items, invalid verdicts, and unsafe verdict changes.
-
-Today the local viewer is the dashboard:
+For now the local viewer is the dashboard.
 
 ```bash
 cmg-view cmg-runs/*.cmg.jsonl --flagged-only
 ```
 
-A web dashboard can use the same report data later.
+A web dashboard can read the same report data later.
+
+## When to use CMG
+
+Use CMG when you run an LLM judge and cannot just trust what it says.
+
+- **Large eval runs.** You score thousands of cases and cannot read every explanation by hand, so CMG flags the ones that need a human and lets you skip the rest.
+- **Reference checks.** You want to catch a verdict that never cited the gold answer (`reference_ignored`).
+- **Rubric coverage.** You need every criterion checked, not quietly skipped (`rubric_coverage_gap`).
+- **Audit and debugging.** You want a replayable trail for each decision, so you can explain a score or work out why scores drift between runs.
+- **Multi-turn judging.** You need to catch a verdict that flipped without a proper retraction (`verdict_flip_without_invalidation`).
+
+CMG will not tell you whether the judge is right, because that call still belongs to a person. What it does check is whether the judge backed its verdict, covered your rubric, and stayed consistent, and it points you at the cases where it did not.
 
 ## Install
 
@@ -77,40 +56,25 @@ pip install 'claim-memory-graph[openai]'
 pip install 'claim-memory-graph[anthropic]'
 ```
 
-The package name is `claim-memory-graph`.
-
-The import name is `cmg`.
-
-The core package has no runtime dependencies.
+The distribution is named `claim-memory-graph`, but you import it as `cmg`. The core package has no runtime dependencies.
 
 ## Quickstart
 
-Run the local demo first.
-
-It needs no API key.
+Start with the local demo. It needs no API key.
 
 ```bash
 python examples/local_judge_demo.py
 cmg-view cmg-runs/*.cmg.jsonl --summary
 cmg-view cmg-runs/*.cmg.jsonl --show-evidence
 cmg-view cmg-runs/*.cmg.jsonl --flagged-only
-```
 
-The CLI starts with this header:
+The `--summary` view gives you the whole run at a glance.
 
-```text
-  ()_()  CMG Judge Audit
-  (o.o)  claim memory graph
-  (> <)
-```
+<p align="center">
+  <img src="docs/assets/cmg-summary.png" alt="cmg-view --summary terminal output with the owl mascot, verdict bars, hard and soft flag counts, criteria coverage, and top review cases" width="600">
+</p>
 
-Then add CMG to your own judge.
-
-You own the main task.
-
-You own the rubric.
-
-CMG only adds the audit layer.
+Once that runs, wire CMG into your own judge. You keep the main task and the rubric. CMG only adds the audit layer.
 
 ```python
 from pathlib import Path
@@ -144,15 +108,15 @@ else:
 print(report["human_review_flags"])
 ```
 
-## What The Judge Must Return
+## What the judge must return
 
-The judge must start with a verdict line:
+The judge's visible answer has to start with a verdict line.
 
 ```text
 VERDICT: pass
 ```
 
-The judge should also add a hidden CMG block with claims:
+It should also add a hidden CMG block with its claims.
 
 ````text
 ```cmg
@@ -160,18 +124,11 @@ The judge should also add a hidden CMG block with claims:
 ```
 ````
 
-CMG records the final `Decision` itself.
+CMG records the final `Decision` itself, so if the model sends a `decision` op, `arun_judge` ignores it. And if the model returns `maybe` when only `pass` and `fail` are allowed, CMG records no decision and the report marks the case for human review.
 
-If the model emits a `decision` op, `arun_judge` ignores it.
+## What you get
 
-If the model returns `maybe` when only `pass` and `fail` are allowed, CMG does
-not record a decision.
-
-The report marks the case for human review.
-
-## What You Get
-
-`judge_report(graph)` returns:
+`judge_report(graph)` returns these fields.
 
 - `verdict`
 - `claims`
@@ -182,13 +139,7 @@ The report marks the case for human review.
 - `human_review_flags`
 - `violations`
 
-Flags are split into two groups.
-
-Hard flags are structural audit failures.
-
-Soft flags are review signals.
-
-Useful flags:
+Flags come in two kinds. Hard flags are real failures in the audit. Soft flags are gentler, just things to review. Here are the ones you will use most.
 
 | Flag | Meaning |
 |---|---|
@@ -204,23 +155,13 @@ Useful flags:
 
 ## Integrations
 
-CMG does not replace your eval framework.
+CMG does not replace your eval framework. It sits inside it. Keep using the framework for datasets, model calls, scores, and totals. Let CMG hold the per-case audit log. Each example below is a small adapter you can drop into one common setup.
 
-It sits inside it.
+- **DeepEval.** Wrap `arun_judge` in a custom metric. `examples/deepeval_metric.py` subclasses `BaseMetric`, so each `measure` call writes a per-case `.cmg.jsonl`, turns the verdict into a score, and puts the CMG path and review flags in the metric's `reason`.
+- **Inspect AI.** Register a `@scorer` that runs the judge. `examples/inspect_ai_scorer.py` returns an Inspect `Score` and keeps the CMG graph path, review flags, and claims in the score metadata, so the audit data rides along with every sample.
+- **OpenAI, or any provider.** For a judge with no framework around it, `examples/openai_judge_demo.py` passes `make_openai_llm_fn(...)` straight in as the `judge_fn`. CMG does not care which provider sits behind it.
 
-Use your framework for datasets, model calls, scores, and aggregation.
-
-Use CMG for per-case audit logs.
-
-Examples:
-
-- `examples/openai_judge_demo.py`
-- `examples/inspect_ai_scorer.py`
-- `examples/deepeval_metric.py`
-
-Use a fresh output file for each case run.
-
-Do not append many runs of the same case to the same JSONL file.
+Use a fresh output file for each case run. Do not append many runs of the same case to one JSONL file.
 
 ## Docs
 
@@ -229,6 +170,8 @@ Do not append many runs of the same case to the same JSONL file.
 | User guide | [docs/user-guide.md](docs/user-guide.md) |
 | Developer guide | [docs/dev-guide.md](docs/dev-guide.md) |
 | Release checklist | [docs/release.md](docs/release.md) |
+
+_These docs, this README included, were drafted with AI and reviewed by hand._
 
 ## Sources
 
