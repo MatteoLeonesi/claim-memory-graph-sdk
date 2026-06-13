@@ -1,4 +1,6 @@
 [![PyPI version](https://img.shields.io/pypi/v/claim-memory-graph.svg)](https://pypi.org/project/claim-memory-graph/)
+[![Downloads](https://static.pepy.tech/badge/claim-memory-graph)](https://pepy.tech/project/claim-memory-graph)
+
 
 # CMG — Claim Memory Graph
 
