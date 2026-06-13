@@ -1,3 +1,5 @@
+[![PyPI version](https://img.shields.io/pypi/v/claim-memory-graph.svg)](https://pypi.org/project/claim-memory-graph/)
+
 # CMG — Claim Memory Graph
 
 A small memory layer for judge and reviewer workflows. CMG tracks what a model reads (evidence), what it concludes (claims), what it decides (decisions), and what it walks back (retractions). When a verdict changes, you can see why.
