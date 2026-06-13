@@ -21,7 +21,7 @@ cannot be mixed into a manual check or upload.
 DIST_DIR="$(mktemp -d)"
 uv build --out-dir "$DIST_DIR"
 uv run --with twine python -m twine check "$DIST_DIR"/*
-uv run --with "$DIST_DIR"/claim_memory_graph-0.1.0-py3-none-any.whl python -c "import cmg; print(cmg.__version__)"
+uv run --with "$DIST_DIR"/claim_memory_graph-0.1.1-py3-none-any.whl python -c "import cmg; print(cmg.__version__)"
 ```
 
 ## Publish
