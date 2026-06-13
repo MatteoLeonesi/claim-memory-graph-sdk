@@ -1,207 +1,74 @@
-# CMG - Claim Memory Graph
+# CMG — Claim Memory Graph
 
-<p align="center">
-  <img src="docs/assets/banner.png" alt="Claim Memory Graph banner" width="100%">
-</p>
+A small memory layer for judge and reviewer workflows. CMG tracks what a model reads (evidence), what it concludes (claims), what it decides (decisions), and what it walks back (retractions). When a verdict changes, you can see why.
 
-<p align="center">
-  <strong>A memory layer for multi-turn and long-horizon workflows where LLM judges or reviewer agents make decisions.</strong>
-</p>
+## Why I Built This
 
-<p align="center">
-  <a href="https://pypi.org/project/claim-memory-graph/">PyPI</a>
-  |
-  <a href="docs/user-guide.md">User guide</a>
-  |
-  <a href="docs/user-guide.md#deepeval-adapter">DeepEval adapter</a>
-  |
-  <a href="docs/user-guide.md#inspect-ai-scorer">Inspect AI scorer</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/MatteoLeonesi/claim-memory-graph-sdk/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/MatteoLeonesi/claim-memory-graph-sdk/actions/workflows/ci.yml/badge.svg">
-  </a>
-  <a href="https://pypi.org/project/claim-memory-graph/">
-    <img alt="PyPI" src="https://img.shields.io/pypi/v/claim-memory-graph.svg">
-  </a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
-  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg">
-</p>
-
-`CMG` is a lightweight memory layer for making LLM-as-a-judge and
-reviewer-agent workflows inspectable across turns. It records the evidence a
-model cites, the claims it commits to, the decisions it makes, and the
-invalidations that explain why earlier claims should be retired.
-
-It is built for multi-turn and long-horizon settings where a judge, reviewer, or
-arbiter needs to stay grounded in evidence instead of silently drifting across
-decisions. The goal is to make unsupported or sycophantic decision shifts
-easier to detect and audit.
-
-## How I Got the Idea
-
-I built CMG because during my eval experiments I kept wanting to inspect *why*
-an LLM-as-a-judge or reviewer agent made a decision, not just the final verdict.
-
-CMG is basically an inspector layer for judge and reviewer agents.
-
-It tracks evidence, claims, decisions, and invalidations as a small append-only
-graph, so you can see what the model cited, what it committed to, and whether a
-later decision actually explains what changed. I think this is useful anywhere
-you have reviewer agents: code review, research workflows, eval pipelines,
-multi-agent systems, and similar settings.
-
-One thing I noticed in my experiments is that this pattern seems to make
-decisions more stable and evidence-grounded. The model appears less likely to
-just agree with pushback or flip its verdict without support or evidence.
+I built CMG while experimenting with LLM code reviewers. I didn't just need the final decision. I needed to know how it was reached. CMG keeps a record of every piece of evidence, every claim, every
+decision, and every retraction behind a review. When a verdict flips, you can trace exactly why.
 
 ## Install
 
 ```bash
 pip install claim-memory-graph
+```
 
-# Optional provider helpers
+Optional helpers:
+
+```bash
 pip install 'claim-memory-graph[openai]'
 pip install 'claim-memory-graph[anthropic]'
 ```
 
-The PyPI distribution is `claim-memory-graph`; the Python import package is
-`cmg`. The core package supports Python 3.10+ and has zero runtime
-dependencies.
-
-## Why CMG
-
-LLM judges often return a final verdict without a durable trace of what the
-verdict depended on. That becomes hard to debug when a later turn, reviewer, or
-user pushback changes the answer.
-
-CMG gives your application a small append-only graph that answers:
-
-- What evidence did the judge cite?
-- Which claims were active when the decision was made?
-- Did the verdict flip without an explicit invalidation?
-- Did a later decision silently drop a still-active reason?
-- Can we inspect the full trail after an eval run or review?
-
-## What It Records
-
-| Node | Role |
-|---|---|
-| `Support` | Evidence supplied by your app: rubrics, diffs, logs, tests, retrieved docs, user facts. |
-| `Commitment` | A concrete claim the model makes, tied to support IDs. |
-| `Decision` | A verdict that cites active commitments. |
-| `Invalidation` | A retraction that explains what changed and which prior claim should be retired. |
-
-Model prose still passes through unchanged. CMG only removes optional hidden
-`cmg` annotation blocks from the user-visible response, persists the graph, and
-returns deterministic `Violation` records when a new operation no longer matches
-the active claim history.
-
-## What It Catches
-
-| Signal | Meaning |
-|---|---|
-| `verdict_flip_without_invalidation` | A new decision changed verdict while prior commitments remained active. |
-| `silent_commitment_drop` | A later decision kept the same verdict but stopped citing an active prior commitment. |
-| `unknown_ref` | An operation cited an ID that is not in the graph. |
-| `wrong_ref_kind` | A commitment cited a non-support, or a decision cited a non-commitment. |
-| `ref_not_active` | A decision cited a commitment that was already invalidated. |
-
-Violations are observations, not blockers. Your application decides whether to
-log them, show them to a human, ask the model for a corrected retraction, or
-ignore them.
+The package installs as `claim-memory-graph` and imports as `cmg`.
 
 ## Quickstart
 
 ```python
 import asyncio
 from pathlib import Path
-
 from cmg import ClaimGraph, JsonlStorage
-
 
 async def main() -> None:
     async with ClaimGraph(JsonlStorage(Path("review.cmg.jsonl"))) as graph:
         evidence = (await graph.add_support(
             "Unit test test_total fails after the patch"
         )).node
-
         claim = (await graph.add_commitment(
             "The patch breaks the total calculation",
             refs=(evidence.node_id,),
         )).node
-
         await graph.add_decision("request_changes", refs=(claim.node_id,))
-
         print(graph.last_decision())
         print([v.code for v in graph.violations()])
-
 
 asyncio.run(main())
 ```
 
-For model annotation, state injection, streaming, provider helpers, and storage
-configuration, see the [user guide](docs/user-guide.md).
+## Integrations
 
-## How It Fits
+CMG fits into existing evaluation frameworks without touching how they
+score or report results.
 
-```mermaid
-flowchart LR
-    Evidence["Evidence / rubric / task data"] --> App["Your app"]
-    App --> LLM["LLM judge or reviewer"]
-    LLM -->|"prose + optional cmg ops"| CMG["cmg layer"]
-    CMG -->|"visible_text"| App
-    CMG --> Graph[("Claim Memory Graph")]
-    Graph -->|"active commitments<br/>last decision"| LLM
-    CMG -->|"Violation records"| Obs["logs / evals / review UI"]
-```
+With **DeepEval**, wrap CMG in a custom metric to log the evidence,
+claims, and decisions behind each judge output. See the
+[DeepEval adapter guide](docs/user-guide.md#deepeval-adapter).
+
+With **Inspect AI**, add CMG to a custom scorer to capture decision
+traces alongside evaluation results. See the
+[Inspect AI scorer guide](docs/user-guide.md#inspect-ai-scorer).
+
+## What It Catches
+CMG flags verdict flips without retractions, dropped active claims,
+unknown references, wrong reference types, and references to already-
+invalidated claims. These are signals, not blockers. Your application
+decides what to do with them.
 
 ## Where It Helps
-
-- LLM-as-a-judge pipelines that need an audit trail for verdicts.
-- AI code review tools that need to explain approvals or requested changes.
-- Eval harnesses that test judge stability under pushback.
-- Multi-reviewer arbitration where judges should cite evidence.
-- Support, moderation, and triage agents that should not silently abandon prior
-  claims.
-
-## Eval Integrations
-
-CMG fits into existing eval frameworks as a judge-side diagnostic layer. The
-eval framework still owns datasets, scoring, aggregation, and reporting; CMG
-adds per-item graph logs, cited commitments, parse warnings, and violation
-codes.
-
-| Framework | Guide |
-|---|---|
-| DeepEval | [Wrap CMG in a custom `BaseMetric`](docs/user-guide.md#deepeval-adapter). |
-| Inspect AI | [Use CMG inside a custom scorer](docs/user-guide.md#inspect-ai-scorer). |
-
-## What It Is Not
-
-CMG is not a benchmark, scorer, policy engine, or replacement for your
-evaluator. It does not prove that a verdict is true, and it does not block model
-output by itself.
-
-It gives your application structured memory and deterministic telemetry. Your
-system decides what to do with the signals.
-
-## Docs
-
-| Topic | Link |
-|---|---|
-| Full integration guide | [docs/user-guide.md](docs/user-guide.md) |
-| Development notes | [docs/dev-guide.md](docs/dev-guide.md) |
-| Release checklist | [docs/release.md](docs/release.md) |
-| PyPI package | [claim-memory-graph](https://pypi.org/project/claim-memory-graph/) |
+CMG is useful anywhere an LLM makes decisions that need to be
+traceable: code review agents, judge systems, evaluation pipelines,
+research review workflows, multi-agent reviewers.
 
 ## License
 
-Apache-2.0.
-
-## Meme
-
-<p align="center">
-  <img src="docs/assets/meme.png" alt="Claim Memory Graph meme" width="560">
-</p>
+Apache-2.0
