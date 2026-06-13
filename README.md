@@ -9,7 +9,7 @@
 
 # CMG - Claim Memory Graph
 
-An LLM judge usually hands you a verdict and little else. You get a `PASS`, but you cannot tell whether it really checked your rubric or used the evidence you gave it. CMG closes that gap by making the judge back up each verdict with claims and tying every claim to the evidence behind it. A set of plain checks then flags the cases where the verdict does not hold up, without putting a second LLM in the loop. It will not tell you who is right, but it will tell you which verdicts you can trust and which ones a person should read.
+I built CMG out of a practical need because as a PhD student studying how to evaluate AI systems, I sometimes use model-based graders in my experiments, which means relying on a language model as a judge. The problem is that those judges gave me too little control and clarity over their decisions. You cannot tell whether the judge actually checked your criteria or simply ignored the evidence you gave it. CMG try to closes that gap by making the judge back up each verdict with explicit claims and tying every claim to the evidence behind it. A set of plain checks then flags the cases where the verdict does not hold up, without putting a second model in the loop. It will not tell you who is right, but it will tell you which verdicts you can "trust" and which ones a person should read.
 
 ## Why
 
