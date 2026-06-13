@@ -21,3 +21,4 @@ uv.lock
 *.swp
 .DS_Store
 eval_runs/
+cmg-runs/

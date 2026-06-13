@@ -15,6 +15,7 @@ from cmg.integration import (
     astream_turn,
     build_annotation_system_prompt,
 )
+from cmg.judge import JUDGE_SYSTEM, JudgeResult, active_claims, arun_judge, extract_verdict
 from cmg.nodes import (
     INVALIDATION_ACCEPTED,
     INVALIDATION_REJECTED,
@@ -27,6 +28,7 @@ from cmg.nodes import (
     Violation,
 )
 from cmg.parser import ParsedTurn, parse_turn
+from cmg.report import judge_report, to_markdown
 from cmg.storage import JsonlStorage, Storage
 
 try:
@@ -37,6 +39,7 @@ except PackageNotFoundError:
 __all__ = [
     "INVALIDATION_ACCEPTED",
     "INVALIDATION_REJECTED",
+    "JUDGE_SYSTEM",
     "SCHEMA_VERSION",
     "AppendResult",
     "AsyncLLMFn",
@@ -48,6 +51,7 @@ __all__ = [
     "DuplicateNodeIdError",
     "Invalidation",
     "JsonlStorage",
+    "JudgeResult",
     "MalformedLogLineError",
     "Message",
     "Node",
@@ -58,8 +62,13 @@ __all__ = [
     "TurnResult",
     "Violation",
     "__version__",
+    "active_claims",
+    "arun_judge",
     "arun_turn",
     "astream_turn",
     "build_annotation_system_prompt",
+    "extract_verdict",
+    "judge_report",
     "parse_turn",
+    "to_markdown",
 ]

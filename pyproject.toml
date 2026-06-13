@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "claim-memory-graph"
 version = "0.1.0"
-description = "Claim Memory Graph: a lightweight memory layer for inspectable LLM judge and reviewer decisions."
+description = "Claim Memory Graph: a lightweight audit layer for inspectable LLM-as-a-judge decisions."
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 authors = [{ name = "Matteo Leonesi" }]
-keywords = ["llm", "memory", "observability", "guardrails", "llm-as-judge", "reviewers", "agents"]
+keywords = ["llm", "memory", "observability", "audit", "llm-as-judge", "evaluation", "rubrics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -27,6 +27,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = []
+
+[project.scripts]
+cmg-view = "cmg.cli:main"
 
 [project.optional-dependencies]
 openai = ["openai>=1.0"]
@@ -50,6 +53,7 @@ Changelog = "https://github.com/MatteoLeonesi/claim-memory-graph-sdk/releases"
 include = [
     "/src",
     "/tests",
+    "/examples",
     "/docs",
     "/README.md",
     "/LICENSE",
